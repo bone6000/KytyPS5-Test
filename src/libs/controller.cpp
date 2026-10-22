@@ -897,6 +897,11 @@ void GameController::ApplyVibration() {
 	if (pad == nullptr) {
 		return;
 	}
+	// Rumble is disabled on pads that are not a DualSense (e.g. a Switch Pro Controller): the
+	// constant HID writes slow the emulation down.
+	if (SDL_GetGamepadType(pad) != SDL_GAMEPAD_TYPE_PS5) {
+		return;
+	}
 
 	const auto large = static_cast<uint16_t>(large_motor * 0x101U);
 	const auto small = static_cast<uint16_t>(small_motor * 0x101U);
