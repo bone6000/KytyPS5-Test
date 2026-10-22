@@ -459,23 +459,20 @@ void TestDiscoveryAndHotplug() {
 }
 
 void TestRumbleFallbackGains() {
+	// Non-DualSense pads (e.g. a Switch Pro Controller) no longer approximate haptics with the
+	// rumble motors: the vibration port is ignored and nothing is written to the pad.
 	Fixture f;
 	auto    port = Open();
-	const auto queue = [&](std::array<float, 2> gains) {
+	for (const std::array<float, 2> gains: {std::array<float, 2> {0.0f, 0.25f},
+	                                        std::array<float, 2> {0.5f, 0.0f},
+	                                        std::array<float, 2> {1.0f, 1.0f}}) {
 		Check(Haptics::Queue(port.get(), 2, pcm.data(), 2, 2, true, unity.data(), 1.0f,
-		                     gains.data()) == 2 * 1000000 / 48000,
-		      "rumble fallback playback time is wrong");
-	};
-	queue({0.0f, 0.25f});
-	Check(pad_rumble[2].large == 0 && pad_rumble[2].small == 16383,
-	      "rumble fallback ignored per-channel gains");
-	queue({0.5f, 0.0f});
-	Check(pad_rumble[2].large == 32767 && pad_rumble[2].small == 0,
-	      "rumble fallback swapped per-channel gains");
-	queue({0.0f, 0.0f});
-	Check(pad_rumble[2].large == 0 && pad_rumble[2].small == 0,
-	      "muted fallback channels still rumbled");
-	Check(streams.empty() && hid_opens == 0, "rumble fallback opened an audio device");
+		                     gains.data()) == 0,
+		      "non-DualSense vibration reported controller playback");
+		Check(pad_rumble[2].large == 0 && pad_rumble[2].small == 0,
+		      "non-DualSense vibration drove the rumble motors");
+	}
+	Check(streams.empty() && hid_opens == 0, "non-DualSense vibration opened an audio device");
 }
 
 void TestRumbleFallbackSwitch() {
@@ -486,12 +483,13 @@ void TestRumbleFallbackSwitch() {
 		Queue(port, pcm.data());
 		Check(bluetooth ? Haptics::UsesBluetooth(port.get()) : streams.size() == 1,
 		      "DualSense transport did not open before fallback");
-		Haptics::Queue(port.get(), 2, pcm.data(), 2, 2, true, unity.data());
+		Check(Haptics::Queue(port.get(), 2, pcm.data(), 2, 2, true, unity.data()) == 0,
+		      "non-DualSense pad reported controller playback");
 		Check(streams.empty() && !Haptics::UsesBluetooth(port.get()) &&
 		          (!bluetooth || hid_closes == 1),
 		      "switching to rumble retained the DualSense transport");
-		Check(pad_rumble[2].large == 65535 && pad_rumble[2].small == 65535,
-		      "switching from DualSense did not start rumble fallback");
+		Check(pad_rumble[2].large == 0 && pad_rumble[2].small == 0,
+		      "switching to a non-DualSense pad started rumble");
 		Queue(port, pcm.data());
 		Check(bluetooth ? Haptics::UsesBluetooth(port.get()) && hid_opens == 2
 		                : streams.size() == 1 && opens == 2,
